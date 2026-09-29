@@ -2,10 +2,10 @@ import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
 import httpx
 
-# 本地开发时可选：如果装了 python-dotenv，会自动从 .env 文件读取环境变量
+# Optional: if python-dotenv is installed, it automatically reads environment variables from a .env file during local development.
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -14,8 +14,8 @@ except ImportError:
 
 app = FastAPI()
 
-# 允许你的 GitHub Pages 前端跨域调用。先用 "*" 跑通，
-# 稳定后建议改成你的具体域名，比如：
+# Allow your GitHub Pages frontend to call this API across origins. Start with "*" for quick setup,
+# and later replace it with your specific domain, for example:
 # ["https://karl-7.github.io"]
 app.add_middleware(
     CORSMiddleware,
@@ -24,14 +24,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Key 从环境变量读取，绝不写进代码或提交到 Git。
-# 本地跑：在项目目录建一个 .env 文件，写一行 GEMINI_API_KEY=你的key
-# 部署到 Render/Railway 等平台：在平台的 Environment Variables 设置里添加同名变量
+# Read the key from environment variables; never hardcode it or commit it to Git.
+# Local development: create a .env file in the project directory with a line like GEMINI_API_KEY=your_key
+# Deployment to Render/Railway or similar platforms: add the same variable in the platform's Environment Variables settings
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     raise RuntimeError(
-        "未找到环境变量 GEMINI_API_KEY。本地开发请在 .env 文件里设置，"
-        "线上部署请在平台的 Environment Variables 里添加。"
+        "GEMINI_API_KEY environment variable not found. For local development, set it in a .env file; "
+        "for production deployment, add it in the platform's Environment Variables settings."
     )
 
 GEMINI_MODEL = "gemini-flash-latest"
@@ -51,18 +51,18 @@ SYSTEM_INSTRUCTION = (
     "(e.g. 'No door visible, try turning right') instead of guessing.\n"
     "5. Do not mention colors, aesthetics, or other purely visual details unless the person explicitly asks for them.\n"
     "6. If the image is too blurry, dark, or unclear to answer confidently, say that briefly and suggest "
-    "moving the camera or turning on more light."
+    "please move the camera a bit."
 )
 
 
 class HistoryTurn(BaseModel):
-    role: str          # "user" 或 "model"
+    role: str          # "user" or "model"
     text: str
 
 
 class AnalyzeRequest(BaseModel):
     prompt: str
-    image_base64: str          # 当前帧，不带 "data:image/jpeg;base64," 前缀
+    image_base64: str          # Current frame without the "data:image/jpeg;base64," prefix
     history: List[HistoryTurn] = []
 
 
@@ -97,16 +97,16 @@ async def analyze(req: AnalyzeRequest):
                 json=body,
             )
     except httpx.HTTPError as e:
-        raise HTTPException(status_code=502, detail=f"请求 Gemini 失败：{e}")
+        raise HTTPException(status_code=502, detail=f"Failed to request Gemini: {e}")
 
     data = resp.json()
     if "error" in data:
-        raise HTTPException(status_code=502, detail=data["error"].get("message", "Gemini API 返回错误"))
+        raise HTTPException(status_code=502, detail=data["error"].get("message", "Gemini API returned an error"))
 
     try:
         answer = data["candidates"][0]["content"]["parts"][0]["text"].strip()
     except (KeyError, IndexError):
-        answer = "（没有收到回答）"
+        answer = "(No response received)"
 
     return {"answer": answer}
 
